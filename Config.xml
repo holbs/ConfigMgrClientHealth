@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Configuration>
+	<LocalFiles>$env:SystemDrive\ClientHealth</LocalFiles> <!-- Path locally on computer for temporary files and local ClientHealth.log if LocalLogFile="True" -->
+	<Client Name="Version">5.00.9120.1000</Client> <!-- Target version for client upgrades -->
+	<Client Name="SiteCode">MCM</Client> <!-- -->
+	<Client Name="Domain">contoso.com</Client> <!-- -->
+	<Client Name="AutoUpgrade">True</Client> <!-- -->
+	<Client Name="Share">\\contoso.com\SYSVOL\contoso.com\ConfigMgrClientHealth</Client> <!-- -->
+	<Client Name="CacheSize" Value="16384" DeleteOrphanedData="True" Enable="True" /> <!-- -->
+	<Client Name="Log" MaxLogSize="4096" MaxLogHistory="7" Enable="True" /> <!-- -->
+	<ClientInstallProperty>SMSSITECODE=MCM</ClientInstallProperty> <!-- -->
+	<ClientInstallProperty>SMSMP=MCM01.contoso.com</ClientInstallProperty> <!-- -->
+	<ClientInstallProperty>FSP=MCM01.contoso.com</ClientInstallProperty> <!-- -->
+	<ClientInstallProperty>DNSSUFFIX=contoso.com</ClientInstallProperty> <!-- -->
+	<ClientInstallProperty>/Source:\\MCM01.contoso.com\SMS_MCM\Client</ClientInstallProperty> <!-- -->
+	<ClientInstallProperty>/MP:MCM01.contoso.com</ClientInstallProperty> <!-- -->
+	<ClientInstallProperty>/SkippRereq:silverlight.exe</ClientInstallProperty> <!-- -->
+	<ClientInstallProperty>/ForceInstall</ClientInstallProperty> <!-- -->
+	<ClientInstallProperty>/AllowMetered</ClientInstallProperty> <!-- -->
+	<ClientInstallProperty>/BITSPriority:HIGH</ClientInstallProperty> <!-- -->
+	<ClientInstallProperty>/UsePKICert</ClientInstallProperty> <!-- -->
+	<Log Name="File" Share="\\contoso.com\SYSVOL\contoso.com\ConfigMgrClientHealth\Logs" Level="Full" MaxLogHistory="7" LocalLogFile="True" Enable="True" /> <!-- Level: Full = everything. ClientInstall = only if installation of ConfigMgr agent fails.  -->
+	<Option Name="CcmSQLCELog" Enable="True" /> <!-- Optional check on the ConfigMgr agent if local database is corrupt -->
+	<Option Name="BITSCheck" Fix="True" Enable="True" /> <!-- -->
+	<Option Name="ClientSettingsCheck" Fix="True" Enable="True" /> <!-- -->
+	<Option Name="DNSCheck" Fix="True" Enable="True" /> <!-- -->
+	<Option Name="Drivers" Enable="True" /> <!-- -->
+	<Option Name="PendingReboot" RebootRequest="True" Enable="True" /> <!-- -->
+	<Option Name="MaxRebootDays" Days="7" Enable="True" /> <!-- -->
+	<Option Name="OSDiskFreeSpace">10</Option> <!-- -->
+	<Option Name="HardwareInventory" Days="7" Fix="True" Enable="True" /> <!-- -->
+	<Option Name="SoftwareMetering" Fix="True" Enable="True" /> <!-- -->
+	<Option Name="WMI" Fix="True" Enable="True"/> <!-- -->
+	<Option Name="RefreshComplianceState" Days="7" Enable="True"/> <!-- -->
+	<Service Name="BITS" StartupType="Automatic (Delayed Start)" State="Running" Uptime=""/> <!-- -->
+	<Service Name="winmgmt" StartupType="Automatic" State="Running" Uptime=""/> <!-- -->
+	<Service Name="wuauserv" StartupType="Automatic (Delayed Start)" State="Running" Uptime=""/> <!-- -->
+	<Service Name="lanmanserver" StartupType="Automatic" State="Running" Uptime=""/> <!-- -->
+	<Service Name="RpcSs" StartupType="Automatic" State="Running" Uptime=""/> <!-- -->
+	<Service Name="W32Time" StartupType="Automatic" State="Running" Uptime=""/> <!-- -->
+	<Service Name="ccmexec" StartupType="Automatic (Delayed Start)" State="Running" Uptime="" /> <!-- -->
+	<Remediation Name="AdminShare" Fix="True" /> <!-- -->
+	<Remediation Name="ClientProvisioningMode" Fix="True" /> <!-- -->
+	<Remediation Name="ClientStateMessages" Fix="True" /> <!-- -->
+	<Remediation Name="ClientWUAHandler" Fix="True"  Days="7"/> <!-- -->
+	<Remediation Name="ClientCertificate" Fix="True" /> <!-- -->
+</Configuration>
