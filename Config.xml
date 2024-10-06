@@ -8,17 +8,12 @@
 	<Client Name="Share">\\contoso.com\SYSVOL\contoso.com\ConfigMgrClientHealth</Client> <!-- -->
 	<Client Name="CacheSize" Value="16384" DeleteOrphanedData="True" Enable="True" /> <!-- -->
 	<Client Name="Log" MaxLogSize="4096" MaxLogHistory="7" Enable="True" /> <!-- -->
-	<ClientInstallProperty>SMSSITECODE=MCM</ClientInstallProperty> <!-- -->
-	<ClientInstallProperty>SMSMP=MCM01.contoso.com</ClientInstallProperty> <!-- -->
-	<ClientInstallProperty>FSP=MCM01.contoso.com</ClientInstallProperty> <!-- -->
-	<ClientInstallProperty>DNSSUFFIX=contoso.com</ClientInstallProperty> <!-- -->
-	<ClientInstallProperty>/Source:\\MCM01.contoso.com\SMS_MCM\Client</ClientInstallProperty> <!-- -->
 	<ClientInstallProperty>/MP:MCM01.contoso.com</ClientInstallProperty> <!-- -->
-	<ClientInstallProperty>/SkippRereq:silverlight.exe</ClientInstallProperty> <!-- -->
-	<ClientInstallProperty>/ForceInstall</ClientInstallProperty> <!-- -->
 	<ClientInstallProperty>/AllowMetered</ClientInstallProperty> <!-- -->
-	<ClientInstallProperty>/BITSPriority:HIGH</ClientInstallProperty> <!-- -->
+	<ClientInstallProperty>/ForceInstall</ClientInstallProperty> <!-- -->
 	<ClientInstallProperty>/UsePKICert</ClientInstallProperty> <!-- -->
+	<ClientInstallProperty>/SkipPrereq:silverlight.exe</ClientInstallProperty> <!-- -->
+	<ClientInstallProperty>SMSSITECODE=MCM</ClientInstallProperty> <!-- -->
 	<Log Name="File" Share="\\contoso.com\SYSVOL\contoso.com\ConfigMgrClientHealth\Logs" Level="Full" MaxLogHistory="7" LocalLogFile="True" Enable="True" /> <!-- Level: Full = everything. ClientInstall = only if installation of ConfigMgr agent fails.  -->
 	<Option Name="CcmSQLCELog" Enable="True" /> <!-- Optional check on the ConfigMgr agent if local database is corrupt -->
 	<Option Name="BITSCheck" Fix="True" Enable="True" /> <!-- -->
