@@ -114,14 +114,15 @@ Begin {
 
     # Import Modules
     # Import BitsTransfer Module (Does not work on PowerShell Core (6), disable check If module failes to import.)
-    $BitsCheckEnabled = $false
     If (Get-Module -ListAvailable -Name BitsTransfer) {
         Try {
             Import-Module BitsTransfer -ErrorAction stop
             $BitsCheckEnabled = $true
         } Catch {
-            $BitsCheckEnabled = $false 
+            $BitsCheckEnabled = $false
         }
+    } Else {
+        $BitsCheckEnabled = $false
     }
 
     #region functions
@@ -770,42 +771,36 @@ Begin {
 
 
     Function Test-BITS {
-        Param([Parameter(Mandatory = $true)]$Log)
-
+        Param(
+            [Parameter(Mandatory = $true)]$Log
+        )
         If ($BitsCheckEnabled -eq $true) {
-            $Errors = Get-BitsTransfer -AllUsers | Where-Object { ($_.JobState -like "TransientError") -or ($_.JobState -like "Transient_Error") -or ($_.JobState -like "Error") }
-
-            If ($null -ne $Errors) {
-                $fix = (Get-XMLConfigBITSCheckFix).ToLower()
-
-                If ($fix -eq "true") {
+            $Errors = Get-BitsTransfer -AllUsers | Where-Object {($_.JobState -like "TransientError") -or ($_.JobState -like "Transient_Error") -or ($_.JobState -like "Error")}
+            If ($Errors) {
+                $Fix = Get-XMLConfigBITSCheckFix
+                If ($Fix -eq "True") {
                     $Text = "BITS: Error. Remediating"
                     $Errors | Remove-BitsTransfer -ErrorAction SilentlyContinue
-                    Invoke-Expression -Command 'sc.exe sdset bits "D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;AU)(A;;CCLCSWRPWPDTLOCRRC;;;PU)"' | Out-Null
-                    $log.BITS = 'Remediated'
-                    $obj = $true
+                    & $env:WINDIR\System32\sc.exe sdset bits "D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;AU)(A;;CCLCSWRPWPDTLOCRRC;;;PU)" | Out-Null
+                    $Log.BITS = 'Remediated'
+                    $Obj = $true
                 } Else {
                     $Text = "BITS: Error. Monitor only"
-                    $log.BITS = 'Error'
-                    $obj = $false
+                    $Log.BITS = 'Error'
+                    $Obj = $false
                 }
-            }
-
-            Else {
+            } Else {
                 $Text = "BITS: OK"
-                $log.BITS = 'OK'
+                $Log.BITS = 'OK'
                 $Obj = $false
             }
-
         } Else {
             $Text = "BITS: PowerShell Module BitsTransfer missing. Skipping check"
-            $log.BITS = "PS Module BitsTransfer missing"
-            $obj = $false
+            $Log.BITS = "BitsTransfer PowerShell module missing"
+            $Obj = $false
         }
-
         Write-Host $Text
         Write-Output $Obj
-
     }
 
     Function Test-ClientSettingsConfiguration {
