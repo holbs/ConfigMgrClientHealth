@@ -1793,6 +1793,7 @@ Begin {
                 Register-DLLFile -FilePath $File
             }
 
+            # Turn off metered connection so client can register post installation
             Write-Verbose "Disable Metered Connections as a client won't register over a metered connection. Note, this is before any Client Settings can apply"
             $AdaptersGuids = Get-NetAdapter | Select-Object -ExpandProperty InterfaceGuid
             Foreach ($Guid in $AdaptersGuids) {
@@ -3834,9 +3835,11 @@ Process {
     # Check if there are client registration issues by checking CCMMessaging.log for: ccm_system_windowsauth/request cannot be fulfilled since use of metered network is not allowed.
     $LogDir = Get-CCMLogDirectory
     $LogFile = "$LogDir\CCMMessaging.log"
-    $LogLine = Search-CMLogFile -LogFile $LogFile -StartTime $StartTime -SearchStrings @('ccm_system_windowsauth/request cannot be fulfilled since use of metered network is not allowed')
+    $LogLine = Search-CMLogFile -LogFile $LogFile -SearchStrings @('ccm_system_windowsauth/request cannot be fulfilled since use of metered network is not allowed')
     If ($logLine) {
         Resolve-Client -Xml $Xml -ClientInstallProperties $ClientInstallProperties
+        # To avoid false positives, remove CCMMessaging.log
+        Remove-Item -Path $LogFile -Force -Confirm:$false | Out-Null
     }
 
     # Get the latest client version in case it was reinstalled by the script
