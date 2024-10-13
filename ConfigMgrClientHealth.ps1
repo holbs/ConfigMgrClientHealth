@@ -1643,8 +1643,8 @@ Begin {
             #Start-Sleep -Seconds 60
 
             Write-Verbose 'Refreshing update policy'
-            Get-SCCMPolicyScanUpdateSource
-            Get-SCCMPolicySourceUpdateMessage
+            Invoke-SCCMPolicyScanUpdateSource
+            Invoke-SCCMPolicySourceUpdateMessage
 
             $log.WUAHandler = "Repaired ($RepairReason)"
             Write-Output "GPO Cache: $($log.WUAHandler)"
@@ -2455,7 +2455,7 @@ Begin {
             If ($fix -eq "true") {
                 $Text = "ConfigMgr Hardware Inventory scan: $HWScanDate. Starting hardware inventory scan of the client."
                 Write-Host $Text
-                Get-SCCMPolicyHardwareInventory
+                Invoke-SCCMPolicyHardwareInventory
 
                 # Get the new date after policy trigger
                 If ($PowerShellVersion -ge 6) {
@@ -2587,50 +2587,30 @@ Begin {
         # Function to test and fix errors that prevent a computer to perform a HW scan. Not sure If this is really needed or not.
     }
 
-    # SCCM Client evaluation policies
-    Function Get-SCCMPolicySourceUpdateMessage {
-        $trigger = "{00000000-0000-0000-0000-000000000032}"
-        If ($PowerShellVersion -ge 6) {
-            Invoke-CimMethod -Namespace 'root\ccm' -ClassName 'sms_client' -MethodName TriggerSchedule -Arguments @{sScheduleID = $trigger } -ErrorAction SilentlyContinue | Out-Null 
-        } Else {
-            Invoke-WmiMethod -Namespace 'root\ccm' -Class 'sms_client' -Name TriggerSchedule -ArgumentList @($trigger) -ErrorAction SilentlyContinue | Out-Null 
-        }
+    # Functions to run certain ConfigMgr client actions
+    Function Invoke-SCCMPolicySourceUpdateMessage {
+        $Trigger = "{00000000-0000-0000-0000-000000000032}"
+        Invoke-CimMethod -Namespace 'Root\Ccm' -ClassName 'SMS_Client' -MethodName TriggerSchedule -Arguments @{sScheduleID = $Trigger} -ErrorAction SilentlyContinue | Out-Null
     }
-
-    Function Get-SCCMPolicySendUnsentStateMessages {
-        $trigger = "{00000000-0000-0000-0000-000000000111}"
-        If ($PowerShellVersion -ge 6) {
-            Invoke-CimMethod -Namespace 'root\ccm' -ClassName 'sms_client' -MethodName TriggerSchedule -Arguments @{sScheduleID = $trigger } -ErrorAction SilentlyContinue | Out-Null 
-        } Else {
-            Invoke-WmiMethod -Namespace 'root\ccm' -Class 'sms_client' -Name TriggerSchedule -ArgumentList @($trigger) -ErrorAction SilentlyContinue | Out-Null 
-        }
+    Function Invoke-SCCMPolicyMachineRequest {
+        $Trigger = "{00000000-0000-0000-0000-000000000021}"
+        Invoke-CimMethod -Namespace 'Root\Ccm' -ClassName 'SMS_Client' -MethodName TriggerSchedule -Arguments @{sScheduleID = $Trigger} -ErrorAction SilentlyContinue | Out-Null
     }
-
-    Function Get-SCCMPolicyScanUpdateSource {
-        $trigger = "{00000000-0000-0000-0000-000000000113}"
-        If ($PowerShellVersion -ge 6) {
-            Invoke-CimMethod -Namespace 'root\ccm' -ClassName 'sms_client' -MethodName TriggerSchedule -Arguments @{sScheduleID = $trigger } -ErrorAction SilentlyContinue | Out-Null 
-        } Else {
-            Invoke-WmiMethod -Namespace 'root\ccm' -Class 'sms_client' -Name TriggerSchedule -ArgumentList @($trigger) -ErrorAction SilentlyContinue | Out-Null 
-        }
+    Function Invoke-SCCMPolicySendUnsentStateMessages {
+        $Trigger = "{00000000-0000-0000-0000-000000000111}"
+        Invoke-CimMethod -Namespace 'Root\Ccm' -ClassName 'SMS_Client' -MethodName TriggerSchedule -Arguments @{sScheduleID = $Trigger} -ErrorAction SilentlyContinue | Out-Null
     }
-
-    Function Get-SCCMPolicyHardwareInventory {
-        $trigger = "{00000000-0000-0000-0000-000000000001}"
-        If ($PowerShellVersion -ge 6) {
-            Invoke-CimMethod -Namespace 'root\ccm' -ClassName 'sms_client' -MethodName TriggerSchedule -Arguments @{sScheduleID = $trigger } -ErrorAction SilentlyContinue | Out-Null 
-        } Else {
-            Invoke-WmiMethod -Namespace 'root\ccm' -Class 'sms_client' -Name TriggerSchedule -ArgumentList @($trigger) -ErrorAction SilentlyContinue | Out-Null 
-        }
+    Function Invoke-SCCMPolicyScanUpdateSource {
+        $Trigger = "{00000000-0000-0000-0000-000000000113}"
+        Invoke-CimMethod -Namespace 'Root\Ccm' -ClassName 'SMS_Client' -MethodName TriggerSchedule -Arguments @{sScheduleID = $Trigger} -ErrorAction SilentlyContinue | Out-Null
     }
-
-    Function Get-SCCMPolicyMachineEvaluation {
-        $trigger = "{00000000-0000-0000-0000-000000000022}"
-        If ($PowerShellVersion -ge 6) {
-            Invoke-CimMethod -Namespace 'root\ccm' -ClassName 'sms_client' -MethodName TriggerSchedule -Arguments @{sScheduleID = $trigger } -ErrorAction SilentlyContinue | Out-Null 
-        } Else {
-            Invoke-WmiMethod -Namespace 'root\ccm' -Class 'sms_client' -Name TriggerSchedule -ArgumentList @($trigger) -ErrorAction SilentlyContinue | Out-Null 
-        }
+    Function Invoke-SCCMPolicyHardwareInventory {
+        $Trigger = "{00000000-0000-0000-0000-000000000001}"
+        Invoke-CimMethod -Namespace 'Root\Ccm' -ClassName 'SMS_Client' -MethodName TriggerSchedule -Arguments @{sScheduleID = $Trigger} -ErrorAction SilentlyContinue | Out-Null
+    }
+    Function Invoke-SCCMPolicyMachineEvaluation {
+        $Trigger = "{00000000-0000-0000-0000-000000000022}"
+        Invoke-CimMethod -Namespace 'Root\Ccm' -ClassName 'SMS_Client' -MethodName TriggerSchedule -Arguments @{sScheduleID = $Trigger} -ErrorAction SilentlyContinue | Out-Null
     }
 
     Function Get-Version {
@@ -3758,15 +3738,15 @@ Process {
     Write-Verbose 'Getting install date of last OS patch for SQL log'
     Get-LastInstalledPatches -Log $log
     Write-Verbose 'Sending unsent state messages If any'
-    Get-SCCMPolicySendUnsentStateMessages
+    Invoke-SCCMPolicySendUnsentStateMessages
     Write-Verbose 'Getting Source Update Message policy and policy to trigger scan update source'
 
     If ($newinstall -eq $false) {
-        Get-SCCMPolicySourceUpdateMessage
-        Get-SCCMPolicyScanUpdateSource
-        Get-SCCMPolicySendUnsentStateMessages
+        Invoke-SCCMPolicySourceUpdateMessage
+        Invoke-SCCMPolicyScanUpdateSource
+        Invoke-SCCMPolicySendUnsentStateMessages
     }
-    Get-SCCMPolicyMachineEvaluation
+    Invoke-SCCMPolicyMachineEvaluation
 
     # Restart ConfigMgr client If tagged for restart and no reinstall tag
     If (($restartCCMExec -eq $true) -and ($Reinstall -eq $false)) {
