@@ -1835,62 +1835,46 @@ Begin {
     }
 
     Function Test-WMI {
-        Param([Parameter(Mandatory = $true)]$Log)
-        $vote = 0
-        $obj = $false
-
-        $result = winmgmt /verIfyrepository
-        switch -wildcard ($result) {
-            # Always fix If this Returns inconsistent
-            "*inconsistent*" {
-                $vote = 100 
-            } # English
-            "*not consistent*" {
-                $vote = 100 
-            } # English
-            "*inkonsekvent*" {
-                $vote = 100 
-            } # Swedish
-            "*epäyhtenäinen*" {
-                $vote = 100 
-            } # Finnish
-            "*inkonsistent*" {
-                $vote = 100 
-            } # German
-            # Add more languages as I learn their inconsistent value
+        Param(
+            [Parameter(Mandatory = $true)]$Log
+        )
+        $Vote = 0
+        $Obj = $false
+        $Result = & $env:WINDIR\System32\wbem\winmgmt.exe /verifyrepository
+        Switch -Wildcard ($Result) {
+            # Always fix if this Returns inconsistent (multiple languages)
+            "*inconsistent*"   {$Vote = 100}
+            "*not consistent*" {$Vote = 100}
+            "*inkonsekvent*"   {$Vote = 100}
+            "*epäyhtenäinen*"  {$Vote = 100}
+            "*inkonsistent*"   {$Vote = 100}
         }
-
         Try {
-            If ($PowerShellVersion -ge 6) {
-                $WMI = Get-CimInstance Win32_ComputerSystem -ErrorAction Stop 
-            } Else {
-                $WMI = Get-WmiObject Win32_ComputerSystem -ErrorAction Stop 
-            }
+            Get-CimInstance Win32_ComputerSystem -ErrorAction Stop | Out-Null
         } Catch {
             Write-Verbose 'Failed to connect to WMI class "Win32_ComputerSystem". Voting for WMI fix...'
-            $vote++
+            $Vote++
         } Finally {
-            If ($vote -eq 0) {
+            If ($Vote -eq 0) {
                 $Text = 'WMI Check: OK'
-                $log.WMI = 'OK'
+                $Log.WMI = 'OK'
                 Write-Host $Text
             } Else {
-                $fix = Get-XMLConfigWMIRepairEnable
-                If ($fix -like "True") {
+                $Fix = Get-XMLConfigWMIRepairEnable
+                If ($Fix -eq "True") {
                     $Text = 'WMI Check: Corrupt. Attempting to repair WMI and reinstall ConfigMgr client.'
                     Write-Warning $Text
                     Repair-WMI
-                    $log.WMI = 'Repaired'
+                    $Log.WMI = 'Repaired'
                 } Else {
-                    $Text = 'WMI Check: Corrupt. Autofix is disabled'
+                    $Text = 'WMI Check: Corrupt. Autofix is not-enabled'
                     Write-Warning $Text
-                    $log.WMI = 'Corrupt'
+                    $Log.WMI = 'Corrupt'
                 }
                 Write-Verbose "Returning true to tag client for reinstall"
-                $obj = $true
+                $Obj = $true
             }
-            #Out-LogFile -Xml $xml -Text $Text
-            Write-Output $obj
+            Write-Output $Obj
         }
     }
 
@@ -2464,36 +2448,25 @@ Begin {
     # TODO: Implement so result of this remediation is stored in WMI log object, next to result of previous WMI check. This do not require db or webservice update
     # ref: https://social.technet.microsoft.com/Forums/de-DE/1f48e8d8-4e13-47b5-ae1b-dcb831c0a93b/setup-was-unable-to-compile-the-file-discoverystatusmof-the-error-code-is-8004100e?forum=configmanagerdeployment
     Function Test-PolicyPlatform {
-        Param([Parameter(Mandatory = $true)]$Log)
+        Param(
+            [Parameter(Mandatory = $true)]$Log
+        )
         Try {
-            If (Get-WmiObject -Namespace 'root/Microsoft' -Class '__Namespace' -Filter 'Name = "PolicyPlatform"') {
-                Write-Host "PolicyPlatform: OK" 
+            If (Get-CimInstance -Namespace 'Root/Microsoft' -ClassName '__Namespace' -Filter 'Name = "PolicyPlatform"') {
+                Write-Host "PolicyPlatform: OK"
             } Else {
                 Write-Warning "PolicyPlatform: Not found, recompiling WMI 'Microsoft Policy Platform\ExtendedStatus.mof'"
-
-                If ($PowerShellVersion -ge 6) {
-                    $OS = Get-CimInstance Win32_OperatingSystem 
-                } Else {
-                    $OS = Get-WmiObject Win32_OperatingSystem 
-                }
-
-                # 32 or 64?
-                If ($OS.OSArchitecture -match '64') {
-                    & mofcomp "$env:ProgramW6432\Microsoft Policy Platform\ExtendedStatus.mof" 
-                } Else {
-                    &  mofcomp "$env:ProgramFiles\Microsoft Policy Platform\ExtendedStatus.mof" 
-                }
-
+                Repair-WMI
                 # Update WMI log object
                 $Text = 'PolicyPlatform Recompiled.'
-                If (-NOT($Log.WMI -eq 'OK')) {
-                    $Log.WMI += ". $Text" 
+                If ($Log.WMI -eq 'OK') {
+                    $Log.WMI = $Text
                 } Else {
-                    $Log.WMI = $Text 
+                    $Log.WMI += ". $Text"
                 }
             }
         } Catch {
-            Write-Warning "PolicyPlatform: RecompilePolicyPlatform failed!" 
+            Write-Warning "PolicyPlatform: RecompilePolicyPlatform failed!"
         }
     }
 
