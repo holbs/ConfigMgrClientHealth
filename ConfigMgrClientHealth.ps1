@@ -1267,31 +1267,26 @@ Begin {
     }
 
     Function Test-ConfigMgrClient {
-        Param([Parameter(Mandatory = $true)]$Log)
-
-        # Check If the SCCM Agent is installed or not.
-        # If installed, perform tests to decide If reinstall is needed or not.
-        If (Get-Service -Name ccmexec -ErrorAction SilentlyContinue) {
+        Param(
+            [Parameter(Mandatory = $true)]$Log
+        )
+        # Check if the ConfigMgr client is installed or not and if installed, perform tests to decide if reinstall is needed or not.
+        If (Get-Service -Name "CcmExec" -ErrorAction SilentlyContinue) {
             $Text = "Configuration Manager Client is installed"
             Write-Host $Text
-
-            # Lets not reinstall client unless tests tells us to.
+            # Lets assume we don't need to reinstall the client unless tests tells us to.
             $Reinstall = $false
-
             # We test that the local database files exists. Less than 7 means the client is horrible broken and requires reinstall.
             $LocalDBFilesPresent = Test-CcmSDF
-            If ($LocalDBFilesPresent -eq $False) {
+            If ($LocalDBFilesPresent -eq $false) {
                 New-ClientInstalledReason -Log $Log -Message "ConfigMgr Client database files missing."
                 Write-Host "ConfigMgr Client database files missing. Reinstalling..."
-                # Add /ForceInstall to Client Install Properties to ensure the client is uninstalled before we install client again.
-                #If (-NOT ($clientInstallProperties -like "*/forceinstall*")) { $clientInstallProperties = $clientInstallProperties + " /forceinstall" }
                 $Reinstall = $true
                 $Uninstall = $true
             }
-
-            # Only test CM client local DB If this check is enabled
-            $testLocalDB = (Get-XMLConfigCcmSQLCELog).ToLower()
-            If ($testLocalDB -like "enable") {
+            # Only test ConfigMgr local DB if this check is enabled
+            $TestLocalDB = Get-XMLConfigCcmSQLCELog
+            If ($TestLocalDB -eq "True") {
                 Write-Host "Testing CcmSQLCELog"
                 $LocalDB = Test-CcmSQLCELog
                 If ($LocalDB -eq $true) {
@@ -1302,67 +1297,73 @@ Begin {
                     $Uninstall = $true
                 }
             }
-
-            $CCMService = Get-Service -Name ccmexec -ErrorAction SilentlyContinue
-
-            # Reinstall If we are unable to start the CM client
+            $CCMService = Get-Service -Name "CcmExec" -ErrorAction SilentlyContinue
+            # Reinstall if we are unable to start the ConfigMgr client
             If (($CCMService.Status -eq "Stopped") -and ($LocalDB -eq $false)) {
                 Try {
                     Write-Host "ConfigMgr Agent not running. Attempting to start it."
                     If ($CCMService.StartType -ne "Automatic") {
                         $Text = "Configuring service CcmExec StartupType to: Automatic (Delayed Start)..."
                         Write-Output $Text
-                        Set-Service -Name CcmExec -StartupType Automatic
+                        Set-Service -Name "CcmExec" -StartupType Automatic
                     }
-                    Start-Service -Name CcmExec
+                    Start-Service -Name "CcmExec"
                 } Catch {
                     $Reinstall = $true
                     New-ClientInstalledReason -Log $Log -Message "Service not running, failed to start."
                 }
             }
-
             # Test that we are able to connect to SMS_Client WMI class
             Try {
-                If ($PowerShellVersion -ge 6) {
-                    $WMI = Get-CimInstance -Namespace root/ccm -Class SMS_Client -ErrorAction Stop 
-                } Else {
-                    $WMI = Get-WmiObject -Namespace root/ccm -Class SMS_Client -ErrorAction Stop 
-                }
+                Get-CimInstance -Namespace "Root/Ccm" -Class "SMS_Client" -ErrorAction Stop
             } Catch {
-                Write-Verbose 'Failed to connect to WMI namespace "root/ccm" class "SMS_Client". Clearing WMI and tagging client for reinstall to fix.'
-
-                # Clear the WMI namespace to avoid having to uninstall first
-                # This is the same action the install after an uninstall would perform
-                Get-WmiObject -Query "Select * from __Namespace WHERE Name='CCM'" -Namespace root | Remove-WmiObject
-
+                Write-Verbose 'Failed to connect to WMI namespace "Root/Ccm" class "SMS_Client". Repairing WMI and tagging client for reinstall to fix.'
+                Repair-WMI
                 $Reinstall = $true
                 New-ClientInstalledReason -Log $Log -Message "Failed to connect to SMS_Client WMI class."
             }
-
-            If ( $reinstall -eq $true) {
-                $Text = "ConfigMgr Client Health thinks the agent need to be reinstalled.."
+            # Check if client is installed, but failing to register by checking CCMMessaging.log for 'ccm_system_windowsauth/request cannot be fulfilled since use of metered network is not allowed'
+            $LogDir = Get-CCMLogDirectory
+            $LogFile = "$LogDir\CCMMessaging.log"
+            $LogLine = Search-CMLogFile -LogFile $LogFile -SearchStrings @('ccm_system_windowsauth/request cannot be fulfilled since use of metered network is not allowed')
+            If ($LogLine) {
+                $AdaptersGuids = Get-NetAdapter | Select-Object -ExpandProperty InterfaceGuid
+                Foreach ($Guid in $AdaptersGuids) {
+                    New-Item -Path "HKLM:\SOFTWARE\Microsoft\DusmSvc\Profiles\$Guid\*" -Force | Out-Null
+                    New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\DusmSvc\Profiles\$Guid\*" -Name UserCost -Value 0 -Type DWord -Force | Out-Null
+                }
+                # Restart the Data Usage service to commit the changes to network cost
+                Restart-Service -Name DusmSvc -Force
+                # To avoid false positives, remove CCMMessaging.log
+                Remove-Item -Path $LogFile -Force -Confirm:$false | Out-Null
+            }
+            # Check if any of the above steps tagged for a repair
+            If ($Reinstall -eq $true) {
+                If ($Uninstall -eq $true) {
+                    $Text = "ConfigMgrClientHealth thinks the agent need to be uninstalled and reinstalled.."
+                } Else {
+                    $Text = "ConfigMgrClientHealth thinks the agent need to be reinstalled.."
+                }
                 Write-Host $Text
                 # Lets check that Registry settings are OK before we Try a new installation.
-                Test-CCMSetup1
-
-                # Adding forceinstall to the client install properties to make sure previous client is uninstalled.
-                #If ( ($localDB -eq $true) -and (-NOT ($clientInstallProperties -like "*/forceinstall*")) ) { $clientInstallProperties = $clientInstallProperties + " /forceinstall" }
-                Resolve-Client -Xml $xml -ClientInstallProperties $clientInstallProperties -FirstInstall $false
-                $log.ClientInstalled = Get-SmallDateTime
+                Test-CCMSetupRegValue
+                # Reinstall the client
+                Resolve-Client -Xml $Xml -ClientInstallProperties $ClientInstallProperties -FirstInstall $false
+                $Log.ClientInstalled = Get-SmallDateTime
                 Start-Sleep 600
             }
         } Else {
             $Text = "Configuration Manager client is not installed. Installing..."
             Write-Host $Text
-            Resolve-Client -Xml $xml -ClientInstallProperties $clientInstallProperties -FirstInstall $true
-            New-ClientInstalledReason -Log $Log -Message "No agent found."
-            $log.ClientInstalled = Get-SmallDateTime
-            #Start-Sleep 600
-
-            # Test again If agent is installed
-            If (Get-Service -Name ccmexec -ErrorAction SilentlyContinue) {
+            Resolve-Client -Xml $Xml -ClientInstallProperties $ClientInstallProperties -FirstInstall $true
+            New-ClientInstalledReason -Log $Log -Message "No client found."
+            $Log.ClientInstalled = Get-SmallDateTime
+            Start-Sleep 600
+            # Test again if client is installed
+            If (Get-Service -Name "CcmExec" -ErrorAction SilentlyContinue) {
+                # Service now found, so client is installed
             } Else {
-                Out-LogFile "ConfigMgr Client installation failed. Agent not detected 10 minutes after triggering installation." -Mode "ClientInstall" -Severity 3 
+                Out-LogFile "ConfigMgr Client installation failed. Agent not detected 10 minutes after triggering installation."  -Mode "ClientInstall" -Severity 3
             }
         }
     }
@@ -1794,15 +1795,6 @@ Begin {
                 }
                 Wait-Process "ccmsetup" -ErrorAction SilentlyContinue
             }
-            # Turn off metered connection so client can register post installation
-            Write-Verbose "Disable Metered Connections as a client won't register over a metered connection. Note, this is before any Client Settings can apply"
-            $AdaptersGuids = Get-NetAdapter | Select-Object -ExpandProperty InterfaceGuid
-            Foreach ($Guid in $AdaptersGuids) {
-                New-Item -Path "HKLM:\SOFTWARE\Microsoft\DusmSvc\Profiles\$Guid\*" -Force | Out-Null
-                New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\DusmSvc\Profiles\$Guid\*" -Name UserCost -Value 0 -Type DWord -Force | Out-Null
-            }
-            # Restart the Data Usage service to commit the changes
-            Restart-Service -Name DusmSvc -Force
             # Install or reinstall the client
             Write-Verbose "Trigger ConfigMgr Client installation."
             Write-Verbose "Client install string: $ClientShare\ccmsetup.exe $ClientInstallProperties"
@@ -3761,16 +3753,6 @@ Process {
             $Log.ClientInstalledReason += " Upgrade failed."
         }
 
-    }
-
-    # Check if there are client registration issues by checking CCMMessaging.log for: ccm_system_windowsauth/request cannot be fulfilled since use of metered network is not allowed.
-    $LogDir = Get-CCMLogDirectory
-    $LogFile = "$LogDir\CCMMessaging.log"
-    $LogLine = Search-CMLogFile -LogFile $LogFile -SearchStrings @('ccm_system_windowsauth/request cannot be fulfilled since use of metered network is not allowed')
-    If ($logLine) {
-        Resolve-Client -Xml $Xml -ClientInstallProperties $ClientInstallProperties
-        # To avoid false positives, remove CCMMessaging.log
-        Remove-Item -Path $LogFile -Force -Confirm:$false | Out-Null
     }
 
     # Get the latest client version in case it was reinstalled by the script
