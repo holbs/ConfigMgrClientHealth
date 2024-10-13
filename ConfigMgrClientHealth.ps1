@@ -1768,26 +1768,32 @@ Begin {
             [Parameter(Mandatory = $true)]$ClientInstallProperties,
             [Parameter(Mandatory = $false)]$FirstInstall = $false
         )
-
         $ClientShare = Get-XMLConfigClientShare
-        If ((Test-Path $ClientShare -ErrorAction SilentlyContinue) -eq $true) {
+        If (Test-Path -Path $ClientShare) {
             If ($FirstInstall -eq $true) {
-                $Text = 'Installing Configuration Manager Client.' 
+                $Text = 'Installing Configuration Manager Client.'
             } Else {
-                $Text = 'Client tagged for reinstall. Reinstalling client...' 
+                $Text = 'Client tagged for reinstall. Reinstalling client...'
             }
             Write-Output $Text
-
-            Write-Verbose "Perform a test on a specIfic Registry key required for ccmsetup to succeed."
-            Test-CCMSetup1
-
-            Write-Verbose "Enforce registration of common DLL files to make sure CCM Agent works."
+            Write-Verbose "Perform a test on a specific Registry key required for ccmsetup to succeed."
+            Test-CCMSetupRegValue
+            Write-Verbose "Enforce registration of common DLL files to make sure CCM client works."
             $DllFiles = 'actxprxy.dll', 'atl.dll', 'Bitsprx2.dll', 'Bitsprx3.dll', 'browseui.dll', 'cryptdlg.dll', 'dssenh.dll', 'gpkcsp.dll', 'initpki.dll', 'jscript.dll', 'mshtml.dll', 'msi.dll', 'mssip32.dll', 'msxml.dll', 'msxml3.dll', 'msxml3a.dll', 'msxml3r.dll', 'msxml4.dll', 'msxml4a.dll', 'msxml4r.dll', 'msxml6.dll', 'msxml6r.dll', 'muweb.dll', 'ole32.dll', 'oleaut32.dll', 'Qmgr.dll', 'Qmgrprxy.dll', 'rsaenh.dll', 'sccbase.dll', 'scrrun.dll', 'shdocvw.dll', 'shell32.dll', 'slbcsp.dll', 'softpub.dll', 'rlmon.dll', 'userenv.dll', 'vbscript.dll', 'Winhttp.dll', 'wintrust.dll', 'wuapi.dll', 'wuaueng.dll', 'wuaueng1.dll', 'wucltui.dll', 'wucltux.dll', 'wups.dll', 'wups2.dll', 'wuweb.dll', 'wuwebv.dll', 'Xpob2res.dll', 'WBEM\wmisvc.dll'
-            foreach ($Dll in $DllFiles) {
-                $file = $env:windir + "\System32\$Dll"
-                Register-DLLFile -FilePath $File
+            Foreach ($Dll in $DllFiles) {
+                $File = "$env:WINDIR\System32\$Dll"
+                Start-Process -FilePath "$env:WINDIR\System32\regsvr32.exe" -Args "/s $File" -Wait -NoNewWindow
             }
-
+            # If tagged for uninstall, uninstall the client first
+            If ($Uninstall -eq $true) {
+                Write-Verbose "Trigger ConfigMgr Client uninstallation."
+                If (Test-Path -Path "$env:WINDIR\ccmsetup\ccmsetup.exe") {
+                    & $env:WINDIR\ccmsetup\ccmsetup.exe /uninstall
+                } Else {
+                    & $ClientShare\ccmsetup.exe /uninstall
+                }
+                Wait-Process "ccmsetup" -ErrorAction SilentlyContinue
+            }
             # Turn off metered connection so client can register post installation
             Write-Verbose "Disable Metered Connections as a client won't register over a metered connection. Note, this is before any Client Settings can apply"
             $AdaptersGuids = Get-NetAdapter | Select-Object -ExpandProperty InterfaceGuid
@@ -1797,43 +1803,20 @@ Begin {
             }
             # Restart the Data Usage service to commit the changes
             Restart-Service -Name DusmSvc -Force
-
-            If ($Uninstall -eq $true) {
-                Write-Verbose "Trigger ConfigMgr Client uninstallation using Invoke-Expression."
-                Invoke-Expression "&'$ClientShare\ccmsetup.exe' /uninstall"
-
-                $Launched = $true
-                Do {
-                    Start-Sleep -Seconds 5
-                    If (Get-Process "ccmsetup" -ErrorAction SilentlyContinue) {
-                        Write-Verbose "ConfigMgr Client Uninstallation still running"
-                        $Launched = $true
-                    } Else {
-                        $Launched = $false 
-                    }
-                } While ($Launched -eq $true)
-            }
-
-            Write-Verbose "Trigger ConfigMgr Client installation using Invoke-Expression."
+            # Install or reinstall the client
+            Write-Verbose "Trigger ConfigMgr Client installation."
             Write-Verbose "Client install string: $ClientShare\ccmsetup.exe $ClientInstallProperties"
-            Invoke-Expression "&'$ClientShare\ccmsetup.exe' $ClientInstallProperties"
-
-            $Launched = $true
-            Do {
-                Start-Sleep -Seconds 5
-                If (Get-Process "ccmsetup" -ErrorAction SilentlyContinue) {
-                    Write-Verbose "ConfigMgr Client installation still running"
-                    $Launched = $true
-                } Else {
-                    $Launched = $false 
-                }
-            } While ($Launched -eq $true)
-
+            & $ClientShare\ccmsetup.exe $ClientInstallProperties
+            Wait-Process "ccmsetup" -ErrorAction SilentlyContinue
+            # Wait for sync if this was the first time installation
             If ($FirstInstall -eq $true) {
-                Write-Host "ConfigMgr Client was installed for the first time. Waiting 6 minutes for client to syncronize policy before proceeding."
-                Start-Sleep -Seconds 360
+                Write-Host "ConfigMgr Client was installed for the first time. Waiting 10 minutes for client to syncronize policy before proceeding."
+                Start-Sleep -Seconds 300
             }
-
+            # Trigger a Machine Policy Request & Evaluation Cycle after client installation
+            Start-Sleep -Seconds 300
+            Invoke-SCCMPolicyMachineRequest
+            Invoke-SCCMPolicyMachineEvaluation
         } Else {
             $Text = 'ERROR: Client tagged for reinstall, but failed to access fileshare: ' + $ClientShare
             Write-Error $Text
