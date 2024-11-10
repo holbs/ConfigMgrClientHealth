@@ -1327,14 +1327,31 @@ Begin {
             $LogFile = "$LogDir\CCMMessaging.log"
             $LogLine = Search-CMLogFile -LogFile $LogFile -SearchStrings @('ccm_system_windowsauth/request cannot be fulfilled since use of metered network is not allowed')
             If ($LogLine) {
-                $AdaptersGuids = Get-NetAdapter | Select-Object -ExpandProperty InterfaceGuid
-                Foreach ($Guid in $AdaptersGuids) {
-                    New-Item -Path "HKLM:\SOFTWARE\Microsoft\DusmSvc\Profiles\$Guid\*" -Force | Out-Null
-                    New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\DusmSvc\Profiles\$Guid\*" -Name UserCost -Value 0 -Type DWord -Force | Out-Null
+                # Directly allow metered connections in WMI to ensure the client can register
+                $ActualClientConfig = Get-CimInstance -Namespace "Root\Ccm\Policy\Machine\ActualConfig" -ClassName "CCM_NetworkSettings"
+                If ($ActualClientConfig.MeteredNetworkUsage -ne 1) {
+                    $ActualClientConfig.MeteredNetworkUsage = 1
+                    Set-CimInstance -InputObject $ActualClientConfig
                 }
-                # Restart the Data Usage service to commit the changes to network cost
-                Restart-Service -Name DusmSvc -Force
-                # To avoid false positives, remove CCMMessaging.log
+                # To avoid false positives, remove CCMMessaging.log, restart SMS Agent Host, then check the new CCMMessaging.log again to see if it's registered now
+                Remove-Item -Path $LogFile -Force -Confirm:$false | Out-Null
+                Get-Service -Name "SMS Agent Host" | Where-Object {$_.Status -eq "Running"} | Restart-Service
+                Get-Service -Name "SMS Agent Host" | Where-Object {$_.Status -ne "Running"} | Start-Service
+                Start-Sleep -Seconds 300
+                $LogLineAgain = Search-CMLogFile -LogFile $LogFile -SearchStrings @('ccm_system_windowsauth/request cannot be fulfilled since use of metered network is not allowed')
+                # If it's still not registered, turn off the metered connection
+                If ($LogLineAgain) {
+                    $AdaptersGuids = Get-NetAdapter | Select-Object -ExpandProperty InterfaceGuid
+                    Foreach ($Guid in $AdaptersGuids) {
+                        New-Item -Path "HKLM:\SOFTWARE\Microsoft\DusmSvc\Profiles\$Guid\*" -Force | Out-Null
+                        New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\DusmSvc\Profiles\$Guid\*" -Name UserCost -Value 0 -Type DWord -Force | Out-Null
+                    }
+                    # Restart the Data Usage service to commit the changes to network cost, then restart SMS Agent Host
+                    Restart-Service -Name DusmSvc -Force
+                    Get-Service -Name "SMS Agent Host" | Where-Object {$_.Status -eq "Running"} | Restart-Service
+                    Get-Service -Name "SMS Agent Host" | Where-Object {$_.Status -ne "Running"} | Start-Service
+                }                
+                # To avoid false positives, remove CCMMessaging.log again
                 Remove-Item -Path $LogFile -Force -Confirm:$false | Out-Null
             }
             # Check if any of the above steps tagged for a repair
