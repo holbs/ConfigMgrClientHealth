@@ -18,4 +18,5 @@ This is a fork of [Anders Rodland's ConfigMgr Client Health script](https://gith
 ## Change Log
 - Updated WMI repair function to a PowerShell version of the script [here](https://www.reddit.com/r/sysadmin/comments/15uux4z/wmi_repair_script_built_in_native_windows_command/)
 - Ignored event ID 7017 when checking for Group Policy errors as detailed [here](https://www.reddit.com/r/SCCM/comments/1aow39q/updates_and_feature_updates_stuck_at_0_download/)
+- Registration errors are remediated by forcing MeteredNetworkUsage to 1 (allowed)
 - Client reinstalls now disable Metered Connections before reinstalling the client. A client on a metered connection won't register after installation as detailed [here](https://www.asquaredozen.com/2020/05/22/lockdown-diary-metered-internet-connections-and-broken-configmgr-clients/)
