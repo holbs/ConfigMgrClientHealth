@@ -1137,7 +1137,7 @@ Begin {
 
     # Function to test that 'HKU:\S-1-5-18\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders\' is set to '%USERPROFILE%\AppData\Roaming'. CCMSETUP will fail If not.
     # Reference: https://www.systemcenterdudes.com/could-not-access-network-location-appdata-ccmsetup-log/
-    Function Test-CCMSetup1 {
+    Function Test-CCMSetupRegValue {
         New-PSDrive -PSProvider Registry -Name HKU -Root HKEY_USERS -ErrorAction SilentlyContinue | Out-Null
         $correctValue = '%USERPROFILE%\AppData\Roaming'
         $currentValue = (Get-Item 'HKU:\S-1-5-18\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders\').GetValue('AppData', $null, 'DoNotExpandEnvironmentNames')
