@@ -50,7 +50,7 @@ Param(
 
 Begin {
     # ConfigMgr Client Health Version
-    $Version = '0.8.3'
+    $Version = '0.8.4'
     $PowerShellVersion = [int]$PSVersionTable.PSVersion.Major
     $global:ScriptPath = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
@@ -3404,7 +3404,7 @@ Begin {
             $q30 = $null
         }
 
-        #ADD ClientSettings.log...
+        # Add ClientSettings.log...
         $query = "begin tran
         If exists (SELECT * FROM $table WITH (updlock,serializable) WHERE Hostname='"+ $log.Hostname + "')
         begin
@@ -3785,6 +3785,8 @@ End {
 
     #Set the last run.
     $Date = Get-Date
+    $RegistryKey = "HKLM:\Software\ConfigMgrClientHealth"
+    $LastRunRegistryValueName = "LastRun"
     Set-RegistryValue -Path $RegistryKey -Name $LastRunRegistryValueName -Value $Date
     Write-Output "Setting last ran to $($Date)"
 
